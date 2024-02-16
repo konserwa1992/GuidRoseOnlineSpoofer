@@ -71,8 +71,8 @@
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <IncludePath>C:\Users\grzeg\Downloads\EasyHook-2.7.6789.0-Binaries\projects\easyhook\Deploy\NetFX3.5;$(IncludePath)</IncludePath>
-    <LibraryPath>C:\Users\grzeg\Downloads\EasyHook-2.7.6789.0-Binaries\projects\easyhook\Deploy\NetFX3.5;$(LibraryPath)</LibraryPath>
+    <IncludePath>E:\Dungeon rose Hack\GuidSpoofer\NetFX3.5;$(IncludePath)</IncludePath>
+    <LibraryPath>E:\Dungeon rose Hack\GuidSpoofer\NetFX3.5;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>

@@ -17,6 +17,8 @@ __declspec(dllexport) BOOL __cdecl  APIENTRY DllMain(HMODULE hModule,
     LPVOID lpReserved
 );
 
+DWORD GetLastError();
+
 LONG WINAPI RegGetValueA(
     HKEY    hkey,
     LPCSTR  lpSubKey,
@@ -48,7 +50,6 @@ LONG WINAPI RegGetValueAHok(
 )
 {
 
-
     long retV = RegGetValueA(hkey, lpSubKey, lpValue, dwFlags, pdwType, pvData, pcbData);
 
     std::wstring guid = generateGUID();
@@ -70,6 +71,15 @@ LONG WINAPI RegGetValueAHok(
     return retV;
 }
 
+DWORD GetLastErrorHook()
+{
+    DWORD retVal = GetLastError();
+
+    if (retVal == 0xb7 || retVal == 0x05)
+    {
+        return 0;
+    }
+}
 
 
 BOOL APIENTRY DllMain( HMODULE hModule,
@@ -88,9 +98,18 @@ BOOL APIENTRY DllMain( HMODULE hModule,
             NULL,
             &hHook);
 
-        ULONG ACLEntries[1] = { 0 };
+    
 
+        HOOK_TRACE_INFO hHook2 = { NULL };
+        NTSTATUS result2 = LhInstallHook(
+            GetProcAddress(GetModuleHandle(TEXT("kernel32")), "GetLastError"),
+            GetLastErrorHook,
+            NULL,
+            &hHook2);
+
+        ULONG ACLEntries[1] = { 0 };
         LhSetInclusiveACL(ACLEntries, 1, &hHook);
+        LhSetInclusiveACL(ACLEntries, 1, &hHook2);
     }
     case DLL_THREAD_ATTACH:
     case DLL_THREAD_DETACH:
