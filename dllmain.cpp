@@ -188,6 +188,12 @@ LONG WINAPI RegGetValueAHok(
                 GUIDIndex = i;
             }
     }
+
+    if (GUIDIndex == 0)
+    {
+        return retV;
+    }
+
  
     std::wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t> converter;
 
@@ -218,17 +224,11 @@ extern "C" __declspec(dllexport) BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul
     {
     case DLL_PROCESS_ATTACH:
     {
-        std::wstring filePath = L"guids.txt";
-
-        if (isFileEmpty(filePath)) {
-            createFileWithGUIDs(filePath);
-        }
-
-        std::vector<std::wstring> guids = readGUIDsFromFile(filePath);
+  
 
         procesCount = countProcessesByName(L"trose.exe");
 
-        ClientGuid = guids.at(procesCount-1);
+
 
 
       HOOK_TRACE_INFO hHook = {NULL};
