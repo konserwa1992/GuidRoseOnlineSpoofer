@@ -4,7 +4,13 @@
 #include "Windows.h"
 #include <string>
 #include <iostream>
+#include <fstream>
 #include <Objbase.h>
+#include <vector>
+#include <psapi.h> 
+
+
+#pragma comment(lib, "psapi.lib")
 
 #if _WIN64
 #pragma comment(lib, "EasyHook64.lib")
@@ -12,12 +18,11 @@
 #pragma comment(lib, "EasyHook32.lib")
 #endif
 
-__declspec(dllexport) BOOL __cdecl  APIENTRY DllMain(HMODULE hModule,
-    DWORD  ul_reason_for_call,
-    LPVOID lpReserved
-);
 
-DWORD GetLastError();
+std::wstring ClientGuid;
+int procesCount;
+
+DWORD(__stdcall* pGetLastError)();
 
 LONG WINAPI RegGetValueA(
     HKEY    hkey,
@@ -39,6 +44,28 @@ std::wstring generateGUID() {
     return std::wstring(guidStr);
 }
 
+
+bool isFileEmpty(const std::wstring& filePath) {
+    std::ifstream file(filePath, std::ios::ate | std::ios::binary);
+    return file.tellg() == 0;
+}
+
+void createFileWithGUIDs(const std::wstring& filePath) {
+    std::wofstream file(filePath);
+    if (!file.is_open()) {
+        std::wcerr << L"Could not open file for writing: " << filePath << std::endl;
+        return;
+    }
+
+    for (int i = 0; i < 10; ++i) {
+        std::wstring guid = generateGUID();
+        file << guid << std::endl;
+    }
+
+    file.close();
+}
+
+
 LONG WINAPI RegGetValueAHok(
     HKEY    hkey,
     LPCSTR  lpSubKey,
@@ -52,7 +79,7 @@ LONG WINAPI RegGetValueAHok(
 
     long retV = RegGetValueA(hkey, lpSubKey, lpValue, dwFlags, pdwType, pvData, pcbData);
 
-    std::wstring guid = generateGUID();
+    std::wstring guid = ClientGuid;
     guid = guid.substr(1, guid.length() - 2);
 
 
@@ -65,13 +92,15 @@ LONG WINAPI RegGetValueAHok(
 
 
     if (!strcmp(lpValue, "MachineGuid")) {
+
        memcpy(pvData, guid_char, guid.length());
+
     }
 
     return retV;
 }
 
-DWORD GetLastErrorHook()
+DWORD  GetLastErrorHook()
 {
     DWORD retVal = GetLastError();
 
@@ -81,17 +110,77 @@ DWORD GetLastErrorHook()
     }
 }
 
+int countProcessesByName(const std::wstring& processName) {
+    DWORD processes[1024], count, processID;
+    if (!EnumProcesses(processes, sizeof(processes), &count)) {
+        std::cerr << "Failed to enumerate processes." << std::endl;
+        return 0;
+    }
 
-BOOL APIENTRY DllMain( HMODULE hModule,
-                       DWORD  ul_reason_for_call,
-                       LPVOID lpReserved
-                     )
+    int processCount = 0;
+    count /= sizeof(DWORD);
+
+    for (unsigned int i = 0; i < count; ++i) {
+        processID = processes[i];
+        if (processID == 0) continue;
+
+        HANDLE hProcess = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, processID);
+        if (hProcess) {
+            HMODULE hMod;
+            DWORD cbNeeded;
+            if (EnumProcessModules(hProcess, &hMod, sizeof(hMod), &cbNeeded)) {
+                wchar_t szProcessName[MAX_PATH];
+                if (GetModuleBaseName(hProcess, hMod, szProcessName, sizeof(szProcessName) / sizeof(wchar_t))) {
+                    if (_wcsicmp(szProcessName, processName.c_str()) == 0) {
+                        ++processCount;
+                    }
+                }
+            }
+            CloseHandle(hProcess);
+        }
+    }
+    return processCount;
+}
+
+
+std::vector<std::wstring> readGUIDsFromFile(const std::wstring& filePath) {
+    std::wifstream file(filePath);
+    if (!file.is_open()) {
+        std::wcerr << L"Could not open file for reading: " << filePath << std::endl;
+        return {};
+    }
+
+    std::vector<std::wstring> guids;
+    std::wstring line;
+    while (std::getline(file, line)) {
+        guids.push_back(line);
+    }
+
+    file.close();
+    return guids;
+}
+
+
+extern "C" __declspec(dllexport) BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserved)
 {
     switch (ul_reason_for_call)
     {
     case DLL_PROCESS_ATTACH:
     {
-        HOOK_TRACE_INFO hHook = { NULL }; 
+        std::wstring filePath = L"guids.txt";
+
+        if (isFileEmpty(filePath)) {
+            createFileWithGUIDs(filePath);
+        }
+
+        std::vector<std::wstring> guids = readGUIDsFromFile(filePath);
+
+        procesCount = countProcessesByName(L"trose.exe");
+
+        ClientGuid = guids.at(procesCount-1);
+
+
+      HOOK_TRACE_INFO hHook = {NULL};
         NTSTATUS result = LhInstallHook(
             GetProcAddress(GetModuleHandle(TEXT("advapi32")), "RegGetValueA"),
             RegGetValueAHok,
