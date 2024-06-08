@@ -2,6 +2,7 @@ To run this program, you need to add GuidSpoofer.dll to the trose.exe file using
 
 To shortcut add --guid \<custom GUID\> 
 like this.
---login --server  45.77.221.232 --username <USER> --password <PASSWORD> --guid {6F5AC3D7-3C02-498B-8C06-DFFB8D395F53}
+
+--login --server  45.77.221.232 --username \<USER\> --password \<PASSWORD\> --guid {6F5AC3D7-3C02-498B-8C06-DFFB8D395F53}
 
 After completing these steps, you can launch multiple clients, and each of them will be treated as a separate machine(spoofed machine guid).
