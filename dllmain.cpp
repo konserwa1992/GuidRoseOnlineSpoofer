@@ -8,7 +8,9 @@
 #include <Objbase.h>
 #include <vector>
 #include <psapi.h> 
-
+#include <shellapi.h>
+#include <locale>
+#include <codecvt>
 
 #pragma comment(lib, "psapi.lib")
 
@@ -57,6 +59,8 @@ void createFileWithGUIDs(const std::wstring& filePath) {
         return;
     }
 
+
+
     for (int i = 0; i < 10; ++i) {
         std::wstring guid = generateGUID();
         file << guid << std::endl;
@@ -66,39 +70,6 @@ void createFileWithGUIDs(const std::wstring& filePath) {
 }
 
 
-LONG WINAPI RegGetValueAHok(
-    HKEY    hkey,
-    LPCSTR  lpSubKey,
-    LPCSTR  lpValue,
-    DWORD   dwFlags,
-    LPDWORD pdwType,
-    char*   pvData,
-    LPDWORD pcbData
-)
-{
-
-    long retV = RegGetValueA(hkey, lpSubKey, lpValue, dwFlags, pdwType, pvData, pcbData);
-
-    std::wstring guid = ClientGuid;
-    guid = guid.substr(1, guid.length() - 2);
-
-
-    int bufferSize = WideCharToMultiByte(CP_UTF8, 0, guid.c_str(), -1, nullptr, 0, NULL, NULL);
-
-    char* guid_char = new char[bufferSize];
-
-
-    WideCharToMultiByte(CP_UTF8, 0, guid.c_str(), -1, guid_char, bufferSize, NULL, NULL);
-
-
-    if (!strcmp(lpValue, "MachineGuid")) {
-
-       memcpy(pvData, guid_char, guid.length());
-
-    }
-
-    return retV;
-}
 
 DWORD  GetLastErrorHook()
 {
@@ -160,6 +131,86 @@ std::vector<std::wstring> readGUIDsFromFile(const std::wstring& filePath) {
     return guids;
 }
 
+
+
+std::vector<std::string> GetCommandLineArguments() {
+    std::vector<std::string> arguments;
+    LPWSTR* argv;
+    int argc;
+
+    // Pobierz argumenty wiersza poleceń
+    argv = CommandLineToArgvW(GetCommandLineW(), &argc);
+    if (argv == NULL) {
+        // Obsłuż błąd
+        return arguments;
+    }
+
+    // Konwertuj argumenty z Unicode do standardowego stringa i dodaj je do wektora
+    for (int i = 0; i < argc; i++) {
+        int bufferSize = WideCharToMultiByte(CP_UTF8, 0, argv[i], -1, NULL, 0, NULL, NULL);
+        std::string arg(bufferSize, 0);
+        WideCharToMultiByte(CP_UTF8, 0, argv[i], -1, &arg[0], bufferSize, NULL, NULL);
+        arguments.push_back(arg);
+    }
+
+    // Zwolnij pamięć przydzieloną przez CommandLineToArgvW
+    LocalFree(argv);
+
+    return arguments;
+}
+
+std::wstring stringToWString(const std::string& str) {
+    std::size_t size = str.length() + 1;
+    std::wstring wstr(size, L'\0');
+    std::mbstowcs(&wstr[0], str.c_str(), size);
+    return wstr;
+}
+
+LONG WINAPI RegGetValueAHok(
+    HKEY    hkey,
+    LPCSTR  lpSubKey,
+    LPCSTR  lpValue,
+    DWORD   dwFlags,
+    LPDWORD pdwType,
+    char* pvData,
+    LPDWORD pcbData
+)
+{
+
+    long retV = RegGetValueA(hkey, lpSubKey, lpValue, dwFlags, pdwType, pvData, pcbData);
+    int GUIDIndex = 0;
+
+    std::vector<std::string> arguments = GetCommandLineArguments();
+
+    for (size_t i = 0; i < arguments.size(); ++i) {
+            if (arguments[i].compare("--guid  "))
+            {
+                GUIDIndex = i;
+            }
+    }
+ 
+    std::wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t> converter;
+
+    std::wstring guid = converter.from_bytes(arguments[GUIDIndex]);// stringToWString();
+    guid = guid.substr(1, guid.length() - 3);
+    std::wcout << guid << std::endl;
+
+    int bufferSize = WideCharToMultiByte(CP_UTF8, 0, guid.c_str(), -1, nullptr, 0, NULL, NULL);
+
+    char* guid_char = new char[bufferSize];
+
+
+    WideCharToMultiByte(CP_UTF8, 0, guid.c_str(), -1, guid_char, bufferSize, NULL, NULL);
+
+
+    if (!strcmp(lpValue, "MachineGuid")) {
+
+        memcpy(pvData, guid_char, guid.length());
+
+    }
+
+    return retV;
+}
 
 extern "C" __declspec(dllexport) BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserved)
 {
